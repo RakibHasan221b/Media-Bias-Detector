@@ -3,14 +3,14 @@ import os
 from dotenv import load_dotenv
 
 # ================== LOAD ENVIRONMENT VARIABLES ==================
-load_dotenv(dotenv_path=r"C:\Users\rakib\Desktop\NEW desktop\THESIS WORK\.env")
+load_dotenv()   # No hardcoded path - works on local + Streamlit Cloud
 
 # ---------------- OPENAI CLIENT ----------------
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Safety check
 if not os.getenv("OPENAI_API_KEY"):
-    raise ValueError("OPENAI_API_KEY not found! Make sure your .env file exists and contains the key.")
+    raise ValueError("❌ OPENAI_API_KEY is missing! Add it in Streamlit Cloud Secrets.")
 
 
 class BiasEngine:
