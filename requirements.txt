@@ -8,3 +8,6 @@ tqdm
 ftfy
 python-dateutil
 lxml
+scikit-learn
+numpy
+streamlit
