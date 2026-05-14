@@ -1,3 +1,5 @@
+streamlit
+python-dotenv
 pandas
 requests
 beautifulsoup4
@@ -10,5 +12,4 @@ python-dateutil
 lxml
 scikit-learn
 numpy
-streamlit
 openai
