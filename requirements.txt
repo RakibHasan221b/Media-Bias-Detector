@@ -11,3 +11,4 @@ lxml
 scikit-learn
 numpy
 streamlit
+openai
