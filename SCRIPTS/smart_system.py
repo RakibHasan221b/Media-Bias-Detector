@@ -1,16 +1,19 @@
-# smart_system.py
 import pandas as pd
+import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from llm import BiasEngine
 
 # ---------------- LOAD DATA ----------------
 def load_data():
-    # Relative paths - works both locally and on Streamlit Cloud
+    # Dynamic path - works on your PC and on GitHub/Streamlit
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(script_dir)   # Go up to project root
+    
     paths = {
-        "dailystar": "Data/dailystar_news.csv",
-        "newage":   "Data/newage_news.csv",
-        "bbc":      "Data/bbc.csv",
-        "guardian": "Data/guardian.csv"
+        "dailystar": os.path.join(repo_root, "Data", "dailystar_news.csv"),
+        "newage":   os.path.join(repo_root, "Data", "newage_news.csv"),
+        "bbc":      os.path.join(repo_root, "Data", "bbc.csv"),
+        "guardian": os.path.join(repo_root, "Data", "guardian.csv")
     }
     
     dfs = []
@@ -25,24 +28,20 @@ def load_data():
                 print(f"Cleaned Daily Star: dropped {len(unnamed_cols)} unnamed columns")
             
             df["media_type"] = "BD" if name in ["dailystar", "newage"] else "International"
-            print(f"Loaded {name}: {len(df)} rows")
+            print(f"✅ Loaded {name}: {len(df)} rows")
             dfs.append(df)
             
-        except FileNotFoundError:
-            print(f"⚠️ Warning: Could not find {path}")
-            continue
         except Exception as e:
             print(f"❌ Error loading {name}: {e}")
             continue
     
     if not dfs:
-        raise FileNotFoundError("No data files were found! Check if 'Data' folder exists in your repo.")
+        raise FileNotFoundError("No data files were found! Check if 'Data' folder exists in root.")
     
     df = pd.concat(dfs, ignore_index=True)
     
     df["published_date"] = pd.to_datetime(df["published_date"], errors='coerce')
     
-    # Softer cleaning
     before = len(df)
     df = df[df["full_text"].notna()]
     df = df[df["full_text"].str.strip().str.len() > 30]
@@ -57,7 +56,7 @@ def load_data():
     return df
 
 
-# ---------------- SEARCH ENGINE (FIXED) ----------------
+# ---------------- SEARCH ENGINE ----------------
 class SearchEngine:
     def __init__(self, df):
         self.df = df.copy().reset_index(drop=True)
@@ -65,21 +64,19 @@ class SearchEngine:
             self.df["title"].fillna("") + " " + self.df["full_text"].fillna("")
         )
         
-        # Fixed TF-IDF with safeguards
         self.vectorizer = TfidfVectorizer(
             stop_words="english",
             max_features=15000,
-            min_df=1,           
+            min_df=1,
             lowercase=True
         )
         self.tfidf_matrix = self.vectorizer.fit_transform(self.df["search_text"])
         
-        print(f"TF-IDF vocabulary size: {len(self.vectorizer.vocabulary_)}")  
+        print(f"TF-IDF vocabulary size: {len(self.vectorizer.vocabulary_)}")
 
     def search(self, keyword=None, topic=None, start_date=None, end_date=None):
         data = self.df.copy()
 
-        # Date filter
         if start_date:
             start_date = pd.to_datetime(start_date)
             data = data[data["published_date"] >= start_date]
@@ -87,11 +84,9 @@ class SearchEngine:
             end_date = pd.to_datetime(end_date)
             data = data[data["published_date"] <= end_date]
 
-        # Topic filter
         if topic and topic != "All":
             data = data[data["topic"].str.contains(topic, case=False, na=False)]
 
-        # Keyword search
         if keyword and str(keyword).strip():
             query_vec = self.vectorizer.transform([keyword])
             scores = (self.tfidf_matrix @ query_vec.T).toarray().flatten()
@@ -99,15 +94,11 @@ class SearchEngine:
             scored_df = self.df.copy()
             scored_df["score"] = scores
 
-            # Re-apply filters
-            if start_date:
-                scored_df = scored_df[scored_df["published_date"] >= start_date]
-            if end_date:
-                scored_df = scored_df[scored_df["published_date"] <= end_date]
+            if start_date: scored_df = scored_df[scored_df["published_date"] >= start_date]
+            if end_date: scored_df = scored_df[scored_df["published_date"] <= end_date]
             if topic and topic != "All":
                 scored_df = scored_df[scored_df["topic"].str.contains(topic, case=False, na=False)]
 
-            # Boost exact matches
             terms = [t.strip() for t in str(keyword).lower().split() if t.strip()]
             if terms:
                 pattern = '|'.join(terms)
@@ -140,17 +131,12 @@ def run_analysis(keyword=None, topic=None, start_date=None, end_date=None):
     engine = SearchEngine(df)
     llm = BiasEngine()
 
-    filtered = engine.search(
-        keyword=keyword,
-        topic=topic,
-        start_date=start_date,
-        end_date=end_date
-    )
+    filtered = engine.search(keyword=keyword, topic=topic, start_date=start_date, end_date=end_date)
 
     print(f"DEBUG: Total articles found = {len(filtered)} | BD: {len(filtered[filtered['media_type']=='BD'])}")
 
     if len(filtered) == 0:
-        return "No relevant articles found. Try different dates or keywords."
+        return "No relevant articles found. Try different dates or keywords.", [], []
 
     bd_df, intl_df = engine.split_media(filtered)
     bd_texts = engine.compress(bd_df)
@@ -166,4 +152,4 @@ def run_analysis(keyword=None, topic=None, start_date=None, end_date=None):
         end_date=end_date or "N/A"
     )
 
-    return result
+    return result, bd_texts, intl_texts   
