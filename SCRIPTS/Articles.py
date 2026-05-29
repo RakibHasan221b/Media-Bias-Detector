@@ -1,7 +1,5 @@
 """
 News Article Analysis Tool
-===========================
-Thesis Version - Fixed & Improved
 """
 
 import pandas as pd
