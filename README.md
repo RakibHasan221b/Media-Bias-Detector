@@ -59,6 +59,7 @@ Each article is filtered and grouped under one of these topics.
 
 The full pipeline works like this:
 
+```text
 News Websites
      |
      v
@@ -78,9 +79,11 @@ LLM-Based Bias and Temporal Analysis
      |
      v
 Streamlit App Interface
+```
 
 ## System Architecture
 
+```text
 +---------------------------+
 |       News Sources        |
 | BBC, Guardian, Daily Star |
@@ -120,9 +123,11 @@ Streamlit App Interface
 |      Streamlit UI         |
 | interactive analysis app  |
 +---------------------------+
+```
 
 ## Project Structure
 
+```text
 Bias-Detector/
 |
 ├── Data/
@@ -158,6 +163,7 @@ Bias-Detector/
 ├── .env.example
 ├── .gitignore
 └── README.md
+```
 
 ## Important Files
 
@@ -372,60 +378,82 @@ The project uses:
 
 Clone the repository:
 
+```bash
 git clone https://github.com/RakibHasan221b/Bias-Detector.git
 cd Bias-Detector
+```
 
 Create a virtual environment:
 
+```bash
 python -m venv thesis
+```
 
 Activate the environment.
 
 On Windows:
 
+```bash
 thesis\Scripts\activate
+```
 
 On macOS or Linux:
 
+```bash
 source thesis/bin/activate
+```
 
 Install dependencies:
 
+```bash
 pip install -r requirements.txt
+```
 
 Install Playwright browsers:
 
+```bash
 playwright install
+```
 
 ## Environment Variables
 
 The LLM features require an OpenAI API key.
 
-Create a .env file in the project root.
+Create a `.env` file in the project root.
 
 You can copy the example file:
 
+```bash
 cp .env.example .env
+```
 
 On Windows PowerShell:
 
+```powershell
 copy .env.example .env
+```
 
 Add your API key:
 
+```env
 OPENAI_API_KEY=your_openai_api_key_here
+```
 
-Do not commit your real .env file to GitHub.
+Do not commit your real `.env` file to GitHub.
 
 ## Running the App
 
 From the project root, run:
 
+```bash
 streamlit run SCRIPTS/app.py
+```
 
-If you are already inside the SCRIPTS folder, run:
+If you are already inside the `SCRIPTS/` folder, run:
 
+```bash
 streamlit run app.py
+```
 
 Streamlit will open the app in your browser.
 
@@ -434,21 +462,21 @@ Streamlit will open the app in your browser.
 ### Current Bias Comparison
 
 1. Open the Streamlit app.
-2. Select Current Bias Comparison (BD vs International).
+2. Select `Current Bias Comparison (BD vs International)`.
 3. Enter an optional keyword.
 4. Select a topic.
 5. Choose a start date and end date.
-6. Click Run Analysis.
+6. Click `Run Analysis`.
 7. Read the generated bias analysis.
 8. Optionally run the detailed academic evaluation.
 
 ### Temporal Change Analysis
 
 1. Open the Streamlit app.
-2. Select Temporal Change Analysis (Recent vs Past).
+2. Select `Temporal Change Analysis (Recent vs Past)`.
 3. Select a topic.
 4. Select a past comparison period.
-5. Click Run Temporal Analysis.
+5. Click `Run Temporal Analysis`.
 6. Read the overall report.
 7. Expand each newspaper section to view source-specific changes.
 
@@ -458,6 +486,7 @@ The project includes source-specific scripts for collecting articles.
 
 A typical scraping workflow is:
 
+```text
 Run scraper
      |
      v
@@ -474,13 +503,15 @@ Remove duplicates
      |
      v
 Save updated CSV and PKL files
+```
 
 ## Daily Update Workflow
 
-The DAILY ARTICLES folder contains scripts intended for daily updates.
+The `DAILY ARTICLES/` folder contains scripts intended for daily updates.
 
 A daily update process can work like this:
 
+```text
 Scheduled run
      |
      v
@@ -494,6 +525,7 @@ Commit updated datasets
      |
      v
 Push changes to GitHub
+```
 
 This can be automated using GitHub Actions or another scheduler.
 
@@ -557,7 +589,7 @@ Possible future improvements include:
 ## Security Notes
 
 - Keep your OpenAI API key private.
-- Do not commit .env files.
+- Do not commit `.env` files.
 - Review generated outputs before using them in formal research.
 - Respect the terms of service of the news websites being scraped.
 
@@ -565,13 +597,13 @@ Possible future improvements include:
 
 Rakib Hasan
 
-GitHub: https://github.com/RakibHasan221b
+GitHub: [RakibHasan221b](https://github.com/RakibHasan221b)
 
 ## Repository
 
 GitHub Repository:
 
-https://github.com/RakibHasan221b/Bias-Detector
+[https://github.com/RakibHasan221b/Bias-Detector](https://github.com/RakibHasan221b/Bias-Detector)
 
 ## Disclaimer
 
