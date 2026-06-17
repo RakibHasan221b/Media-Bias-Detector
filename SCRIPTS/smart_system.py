@@ -103,6 +103,35 @@ class SearchEngine:
 
         print(f"TF-IDF vocabulary size: {len(self.vectorizer.vocabulary_)}")
 
+    def _balanced_results(self, data, limit):
+        """Return equal BD and International articles whenever both sides exist."""
+        if len(data) == 0 or "media_type" not in data.columns:
+            return data.head(limit)
+
+        bd = data[data["media_type"] == "BD"]
+        intl = data[data["media_type"] == "International"]
+
+        if len(bd) == 0 or len(intl) == 0:
+            return data.head(limit)
+
+        per_side_limit = min(len(bd), len(intl), max(limit // 2, 1))
+
+        balanced = pd.concat([bd.head(per_side_limit), intl.head(per_side_limit)])
+
+        sort_columns = []
+        ascending = []
+        if "score" in balanced.columns:
+            sort_columns.append("score")
+            ascending.append(False)
+        if "published_date" in balanced.columns:
+            sort_columns.append("published_date")
+            ascending.append(False)
+
+        if sort_columns:
+            balanced = balanced.sort_values(sort_columns, ascending=ascending)
+
+        return balanced.head(limit)
+
     def search(self, keyword=None, topic=None, start_date=None, end_date=None):
         data = self.df.copy()
 
@@ -146,9 +175,10 @@ class SearchEngine:
                 scored_df.loc[mask, "score"] += 2.0
 
             scored_df = scored_df.sort_values("score", ascending=False)
-            data = scored_df.head(60)
+            data = self._balanced_results(scored_df, 60)
         else:
-            data = data.head(80)
+            data = data.sort_values("published_date", ascending=False)
+            data = self._balanced_results(data, 80)
 
         return data
 
@@ -182,7 +212,8 @@ def run_analysis(keyword=None, topic=None, start_date=None, end_date=None):
 
     print(
         f"DEBUG: Total articles found = {len(filtered)} | "
-        f"BD: {len(filtered[filtered['media_type'] == 'BD'])}"
+        f"BD: {len(filtered[filtered['media_type'] == 'BD'])} | "
+        f"International: {len(filtered[filtered['media_type'] == 'International'])}"
     )
 
     if len(filtered) == 0:
