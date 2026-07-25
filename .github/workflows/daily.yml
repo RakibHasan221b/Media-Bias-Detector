@@ -42,10 +42,9 @@ jobs:
           echo "Running Daily Star scraper..."
           python "DAILY ARTICLES/DAILYSTARDAILY.py"
 
-      - name: Run New Age scraper
-        run: |
-          echo "Running New Age scraper..."
-          python "DAILY ARTICLES/NEWAGEDAILY.py"
+      # New Age scraper paused: newagebd.net now blocks automated requests
+      # (Cloudflare bot protection, confirmed unfixable via Playwright/stealth).
+      # DAILY ARTICLES/NEWAGEDAILY.py is left in place if this changes later.
 
       - name: Commit updated data
         run: |
