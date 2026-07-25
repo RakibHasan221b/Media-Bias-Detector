@@ -1,5 +1,17 @@
+import os
+
 import streamlit as st
 from datetime import datetime
+
+# Streamlit Cloud exposes secrets via st.secrets, not as OS env vars like a local
+# .env file does. Bridge it here, before importing anything that reads the key
+# via os.getenv() (llm.py). Locally, st.secrets is just empty/missing and this
+# no-ops, falling back to llm.py's own load_dotenv() from .env as before.
+if "OPENAI_API_KEY" not in os.environ:
+    try:
+        os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+    except Exception:
+        pass
 
 from analysis import run_temporal_analysis
 from llm import BiasEvaluator
