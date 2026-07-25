@@ -15,14 +15,12 @@ import sys
 
 # ========================= CONFIG =========================
 BASE_URL = "https://www.newagebd.net/articlelist/31/world"
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "Data"))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(SCRIPT_DIR, "..", "SCRIPTS"))
+import db
 
-os.makedirs(BASE_PATH, exist_ok=True)
-
-OUTPUT_CSV = os.path.join(BASE_PATH, "newage_news.csv")
-OUTPUT_PKL = os.path.join(BASE_PATH, "newage_news.pkl")
-LAST_PAGE_PKL = os.path.join(BASE_PATH, "newage_last_page.pkl")
+TABLE_NAME = "newage"
+LAST_PAGE_PKL = os.path.join(db.DATA_DIR, "newage_last_page.pkl")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -50,23 +48,14 @@ TOPICS = {
 OPINION_KEYWORDS = ["opinion", "editorial", "analysis", "commentary", "op-ed", "column"]
 
 # ====================== LOAD DATA ======================
-if os.path.exists(OUTPUT_PKL):
-    with open(OUTPUT_PKL, "rb") as f:
-        articles_df = pickle.load(f)
-    print(f"Loaded {len(articles_df)} existing articles.")
-else:
-    articles_df = pd.DataFrame(columns=["published_date", "topic", "source", "region", "title", "url", "full_text"])
+articles_df = db.load_table(TABLE_NAME)
+print(f"Loaded {len(articles_df)} existing articles from SQL.")
 
 existing_urls = set(articles_df['url'].tolist())
 
-# Robust latest date detection
 if not articles_df.empty:
-    temp_df = articles_df.copy()
-    temp_df['parsed_date'] = pd.to_datetime(temp_df['published_date'], format='%d-%m-%y', errors='coerce')
-    temp_df['parsed_date'] = temp_df['parsed_date'].fillna(
-        pd.to_datetime(temp_df['published_date'], format='%d-%m-%Y', errors='coerce')
-    )
-    latest_known_date = temp_df['parsed_date'].max().date()
+    parsed_dates = pd.to_datetime(articles_df['published_date'], errors='coerce')
+    latest_known_date = parsed_dates.max().date()
     print(f"Latest date in existing data: {latest_known_date.strftime('%d-%m-%Y')}")
 else:
     latest_known_date = datetime(2025, 1, 1).date()
@@ -157,37 +146,6 @@ def parse_article(url: str):
 
     except Exception:
         return None, None, ""
-
-# ====================== SAFE SAVE ======================
-def safe_save_csv(df, filename):
-    try:
-        df.to_csv(filename, index=False)
-        print(f"💾 Saved to: {filename}")
-    except PermissionError:
-        alt_name = filename.replace(".csv", "_new.csv")
-        print(f"⚠️ File open. Saving as {alt_name}")
-        df.to_csv(alt_name, index=False)
-
-# ====================== SORT FUNCTION ======================
-def sort_df(df):
-    if df.empty:
-        return df
-    df = df.copy()
-    df['parsed_date'] = pd.to_datetime(df['published_date'], format='%d-%m-%y', errors='coerce')
-    df['parsed_date'] = df['parsed_date'].fillna(
-        pd.to_datetime(df['published_date'], format='%d-%m-%Y', errors='coerce')
-    )
-    df = df.dropna(subset=['parsed_date'])
-    df['published_date'] = df['parsed_date'].dt.date
-    
-    topic_order = {"Russia Ukraine war": 1, "Iran Israel war": 2, "Taiwan Strait conflict": 3}
-    df['topic_order'] = df['topic'].map(topic_order).fillna(999)
-    
-    df = df.sort_values(by=['parsed_date', 'topic_order'], ascending=[False, True])
-    df = df.drop(columns=['parsed_date', 'topic_order'])
-    
-    df['published_date'] = df['published_date'].apply(lambda x: x.strftime("%d-%m-%Y"))
-    return df
 
 # ====================== MAIN ======================
 def main():
@@ -281,17 +239,13 @@ if __name__ == "__main__":
     collected = main()
 
     if collected:
-        new_df = pd.DataFrame(collected)
-        combined_df = pd.concat([articles_df, new_df], ignore_index=True).drop_duplicates(subset=['url'])
-        combined_df = sort_df(combined_df)
-
-        safe_save_csv(combined_df, OUTPUT_CSV)
-        with open(OUTPUT_PKL, "wb") as f:
-            pickle.dump(combined_df, f)
+        new_df = pd.DataFrame(collected).drop_duplicates(subset=['url'])
+        inserted = db.upsert_articles(TABLE_NAME, new_df)
+        total = len(db.load_table(TABLE_NAME))
 
         if os.path.exists(LAST_PAGE_PKL):
             os.remove(LAST_PAGE_PKL)
 
-        print(f"\n✅ Done! Added {len(new_df)} new articles. Total: {len(combined_df)}")
+        print(f"\n✅ Done! Added {inserted} new articles. Total in '{TABLE_NAME}' table: {total}")
     else:
         print("\n✅ No new valid articles found today.")

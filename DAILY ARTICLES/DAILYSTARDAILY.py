@@ -1,4 +1,5 @@
 # DAILYSTAR_NEWS_DAILY.PY
+import sys
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -11,12 +12,11 @@ import random
 
 # ========================= CONFIG =========================
 BASE_URL = "https://www.thedailystar.net/news/world"
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(SCRIPT_DIR, "..", "SCRIPTS"))
+import db
 
-BASE_PATH = os.path.join(BASE_DIR, "..", "Data")   # go one folder up
-BASE_PATH = os.path.abspath(BASE_PATH)
-
-OUTPUT_CSV = os.path.join(BASE_PATH, "dailystar_news.csv")
+TABLE_NAME = "dailystar"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -32,15 +32,12 @@ TOPICS = {
 
 OPINION_KEYWORDS = ["opinion", "editorial", "analysis", "commentary", "op-ed", "column"]
 
-# ====================== LOAD CSV ======================
-if os.path.exists(OUTPUT_CSV):
-    df = pd.read_csv(OUTPUT_CSV)
-    df['published_date'] = pd.to_datetime(df['published_date'], format="%d-%m-%y", errors='coerce')
-    print(f"Loaded {len(df)} existing articles from CSV.")
-    print(f"Latest date in CSV: {df['published_date'].max().strftime('%d-%m-%Y')}")
-else:
-    df = pd.DataFrame(columns=["published_date", "topic", "source", "region", "title", "url", "full_text"])
-    print("CSV not found!")
+# ====================== LOAD DATA ======================
+df = db.load_table(TABLE_NAME)
+df['published_date'] = pd.to_datetime(df['published_date'], errors='coerce')
+print(f"Loaded {len(df)} existing articles from SQL.")
+if len(df) > 0:
+    print(f"Latest date in SQL: {df['published_date'].max().strftime('%d-%m-%Y')}")
 
 existing_urls = set(df['url'].tolist())
 latest_date = df['published_date'].max().date() if len(df) > 0 else datetime(2025, 1, 1).date()
@@ -196,18 +193,10 @@ if __name__ == "__main__":
     collected = main()
 
     if collected:
-        new_df = pd.DataFrame(collected)
-        combined = pd.concat([df, new_df], ignore_index=True).drop_duplicates(subset=['url'])
+        new_df = pd.DataFrame(collected).drop_duplicates(subset=['url'])
+        inserted = db.upsert_articles(TABLE_NAME, new_df)
+        total = len(db.load_table(TABLE_NAME))
 
-        combined['published_date'] = pd.to_datetime(combined['published_date'])
-        topic_order = {"Russia Ukraine war": 1, "Iran Israel war": 2, "Taiwan Strait conflict": 3}
-        combined['topic_order'] = combined['topic'].map(topic_order).fillna(999)
-
-        combined = combined.sort_values(by=['published_date', 'topic_order'], ascending=[False, True])
-        combined = combined.drop(columns=['topic_order'])
-        combined['published_date'] = combined['published_date'].dt.strftime("%d-%m-%y")
-
-        combined.to_csv(OUTPUT_CSV, index=False)
-        print(f"\n✅ DONE! Added {len(new_df)} new articles. Total: {len(combined)}")
+        print(f"\n✅ DONE! Added {inserted} new articles. Total in '{TABLE_NAME}' table: {total}")
     else:
         print("\n✅ No new articles found today.")

@@ -16,9 +16,11 @@ import sys
 
 # ========================= CONFIG =========================
 BASE_URL = "https://www.thedailystar.net/news/world"
-OUTPUT_CSV = r"C:\Users\rakib\Desktop\NEW desktop\THESIS WORK\Data\dailystar_news.csv"
-OUTPUT_PKL = r"C:\Users\rakib\Desktop\NEW desktop\THESIS WORK\Data\dailystar_news.pkl"
-LAST_PAGE_PKL = r"C:\Users\rakib\Desktop\NEW desktop\THESIS WORK\Data\dailystar_last_page.pkl"
+
+import db
+
+TABLE_NAME = "dailystar"
+LAST_PAGE_PKL = os.path.join(db.DATA_DIR, "dailystar_last_page.pkl")
 
 CUTOFF_DATE = datetime(2025, 6, 1)
 
@@ -37,12 +39,8 @@ TOPICS = {
 OPINION_KEYWORDS = ["opinion", "editorial", "analysis", "commentary", "op-ed", "column"]
 
 # ====================== LOAD DATA ======================
-if os.path.exists(OUTPUT_PKL):
-    with open(OUTPUT_PKL, "rb") as f:
-        articles_df = pickle.load(f)
-    print(f"Loaded {len(articles_df)} existing articles.")
-else:
-    articles_df = pd.DataFrame(columns=["published_date", "topic", "source", "region", "title", "url", "full_text"])
+articles_df = db.load_table(TABLE_NAME)
+print(f"Loaded {len(articles_df)} existing articles from SQL.")
 
 existing_urls = set(articles_df['url'].tolist())
 
@@ -128,15 +126,6 @@ def parse_article(url: str):
         print(f"   Error parsing {url}: {e}")
         return None, None, ""
 
-# ====================== SAFE CSV SAVE ======================
-def safe_save_csv(df, filename):
-    try:
-        df.to_csv(filename, index=False)
-    except PermissionError:
-        alt_name = filename.replace(".csv", "_new.csv")
-        print(f"⚠️ File open. Saving as {alt_name}")
-        df.to_csv(alt_name, index=False)
-
 # ====================== CTRL+C SAVE ======================
 collected_articles = []
 current_page = start_page
@@ -144,34 +133,13 @@ current_page = start_page
 def signal_handler(sig, frame):
     print("\n\n⚠️ Interrupted! Saving progress...")
     if collected_articles:
-        new_df = pd.DataFrame(collected_articles)
-        combined = pd.concat([articles_df, new_df], ignore_index=True).drop_duplicates(subset=['url'])
-
-        combined['published_date'] = pd.to_datetime(combined['published_date'])
-
-        topic_order = {
-            "Russia Ukraine war": 1,
-            "Iran Israel war": 2,
-            "Taiwan Strait conflict": 3
-        }
-        combined['topic_order'] = combined['topic'].map(topic_order).fillna(999)
-
-        combined = combined.sort_values(
-            by=['published_date', 'topic_order'],
-            ascending=[False, True]
-        )
-
-        combined = combined.drop(columns=['topic_order'])
-
-        combined['published_date'] = combined['published_date'].dt.strftime("%d-%m-%Y")
-
-        combined.to_pickle(OUTPUT_PKL)
-        safe_save_csv(combined, OUTPUT_CSV)
+        new_df = pd.DataFrame(collected_articles).drop_duplicates(subset=['url'])
+        inserted = db.upsert_articles(TABLE_NAME, new_df)
 
         with open(LAST_PAGE_PKL, "wb") as f:
             pickle.dump(current_page - 1, f)
 
-        print(f"✅ Saved {len(new_df)} new articles. Resume from page {current_page} next time.")
+        print(f"✅ Saved {inserted} new articles. Resume from page {current_page} next time.")
     else:
         print("No new articles to save.")
     sys.exit(0)
@@ -251,38 +219,16 @@ def main():
         current_page += 1
         time.sleep(0.8)
 
-    # ====================== FINAL PROCESSING & SORTING ======================
+    # ====================== FINAL SAVE ======================
     if collected_articles:
-        new_df = pd.DataFrame(collected_articles)
-        combined_df = pd.concat([articles_df, new_df], ignore_index=True).drop_duplicates(subset=['url'])
-
-        combined_df['published_date'] = pd.to_datetime(combined_df['published_date'])
-
-        topic_order = {
-            "Russia Ukraine war": 1,
-            "Iran Israel war": 2,
-            "Taiwan Strait conflict": 3
-        }
-        combined_df['topic_order'] = combined_df['topic'].map(topic_order).fillna(999)
-
-        combined_df = combined_df.sort_values(
-            by=['published_date', 'topic_order'],
-            ascending=[False, True]
-        )
-
-        combined_df = combined_df.drop(columns=['topic_order'])
-
-        combined_df['published_date'] = combined_df['published_date'].dt.strftime("%d-%m-%Y")
-
-        safe_save_csv(combined_df, OUTPUT_CSV)
-        with open(OUTPUT_PKL, "wb") as f:
-            pickle.dump(combined_df, f)
+        new_df = pd.DataFrame(collected_articles).drop_duplicates(subset=['url'])
+        inserted = db.upsert_articles(TABLE_NAME, new_df)
+        total = len(db.load_table(TABLE_NAME))
 
         if os.path.exists(LAST_PAGE_PKL):
             os.remove(LAST_PAGE_PKL)
 
-        print(f"\n✅ Done! Added {len(new_df)} articles. Total: {len(combined_df)}")
-        print("Articles are now grouped by date → Russia Ukraine first, then Iran Israel, then Taiwan")
+        print(f"\n✅ Done! Added {inserted} articles. Total in '{TABLE_NAME}' table: {total}")
     else:
         print("\nNo new articles with valid dates were found.")
 

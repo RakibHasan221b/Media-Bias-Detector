@@ -13,6 +13,8 @@ from dateutil import parser as date_parser
 import logging
 import os
 
+import db
+
 # ---------------------------
 # Silence warnings
 # ---------------------------
@@ -22,8 +24,7 @@ logging.getLogger('urllib3').setLevel(logging.WARNING)
 # ---------------------------
 # CONFIG
 # ---------------------------
-CSV_FILE = r"C:\Users\rakib\Desktop\NEW desktop\THESIS WORK\Data\bbc.csv"
-PKL_FILE = r"C:\Users\rakib\Desktop\NEW desktop\THESIS WORK\Data\bbc.pkl"
+TABLE_NAME = "bbc"
 START_DATE = datetime(2025, 6, 1)
 MAX_PAGES = 60
 ua = fake_useragent.UserAgent()
@@ -52,17 +53,19 @@ BBC_SELECTORS = [
 # Helper: Load last state
 # ---------------------------
 def load_last_state():
-    if os.path.exists(PKL_FILE):
-        try:
-            df = pd.read_pickle(PKL_FILE)
-            df['published_date'] = pd.to_datetime(df['published_date'], errors='coerce')
-            last_date = df['published_date'].max()
-            existing_urls = set(df['url'].dropna().tolist())
-            return df, last_date, existing_urls
-        except:
-            pass
-    # No previous state
-    return pd.DataFrame(), START_DATE, set()
+    df = db.load_table(TABLE_NAME)
+    df = df.dropna(subset=['url', 'published_date'])
+    if df.empty:
+        return pd.DataFrame(), START_DATE, set()
+
+    df['published_date'] = pd.to_datetime(df['published_date'], errors='coerce')
+    df = df.dropna(subset=['published_date'])
+    if df.empty:
+        return pd.DataFrame(), START_DATE, set()
+
+    last_date = df['published_date'].max()
+    existing_urls = set(df['url'].dropna().tolist())
+    return df, last_date, existing_urls
 
 # ---------------------------
 # Scraper function
@@ -185,27 +188,12 @@ async def scrape_bbc():
     # ---------------------------
     if all_collected:
         new_df = pd.DataFrame(all_collected)
-        combined = pd.concat([df_old, new_df], ignore_index=True) if not df_old.empty else new_df
-        combined = combined.drop_duplicates(subset=['url'], keep='last')
-        combined['published_date'] = pd.to_datetime(combined['published_date'], errors='coerce')
+        new_df = new_df.drop_duplicates(subset=['url'], keep='last')
 
-        # Make 'topic' ordered categorical for consistent sorting
-        topic_order = ["Russia Ukraine war", "Iran Israel war", "Taiwan Strait conflict"]
-        combined['topic'] = pd.Categorical(combined['topic'], categories=topic_order, ordered=True)
+        inserted = db.upsert_articles(TABLE_NAME, new_df)
+        total = len(db.load_table(TABLE_NAME))
 
-        # Sort: latest date first, then by topic, then by source
-        combined = combined.sort_values(
-            by=['published_date', 'topic', 'source'],
-            ascending=[False, True, True]
-        )
-
-        # Save CSV (latest date first, topics grouped, source sorted)
-        combined.to_csv(CSV_FILE, index=False, encoding="utf-8-sig")
-
-        # Save PKL for faster next runs
-        combined.to_pickle(PKL_FILE)
-
-        print(f"\n✅ {len(new_df)} new articles added → Total in CSV/PKL: {len(combined)} (sorted for LLM)")
+        print(f"\n✅ {inserted} new articles added to SQL → Total in '{TABLE_NAME}' table: {total}")
     else:
         print("\n🟡 No new articles found — already up to date")
 
@@ -215,7 +203,7 @@ async def scrape_bbc():
 async def main():
     print("🚀 BBC scraper started:", datetime.now().strftime("%Y-%m-%d %H:%M"))
     await scrape_bbc()
-    print("\n✅ DONE. Check:", CSV_FILE)
+    print(f"\n✅ DONE. Data stored in Data/articles.db → table '{TABLE_NAME}'")
 
 if __name__ == "__main__":
     if sys.platform == "win32":

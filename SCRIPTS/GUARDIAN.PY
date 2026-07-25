@@ -11,9 +11,10 @@ import re
 
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 
+import db
+
 # ========================= CONFIG =========================
-CSV_FILE = r"C:\Users\rakib\Desktop\NEW desktop\THESIS WORK\Data\guardian.csv"
-PKL_FILE = r"C:\Users\rakib\Desktop\NEW desktop\THESIS WORK\Data\guardian.pkl"
+TABLE_NAME = "guardian"
 
 START_DATE = datetime(2025, 6, 1)
 API_KEY = "9942b4c5-ebe7-48d7-9b4f-b2b8c5194aaa"
@@ -74,16 +75,18 @@ def is_relevant(title, clean_text, topic):
 
 # ====================== LOAD STATE ======================
 def load_last_state():
-    if os.path.exists(PKL_FILE):
-        try:
-            df = pd.read_pickle(PKL_FILE)
-            df['published_date'] = pd.to_datetime(df['published_date'], errors='coerce', utc=True).dt.tz_localize(None)
-            last_date = df['published_date'].max() or START_DATE
-            existing_urls = set(df['url'].dropna().unique())
-            return df, last_date, existing_urls
-        except:
-            pass
-    return pd.DataFrame(), START_DATE, set()
+    df = db.load_table(TABLE_NAME)
+    if df.empty:
+        return pd.DataFrame(), START_DATE, set()
+
+    df['published_date'] = pd.to_datetime(df['published_date'], errors='coerce', utc=True).dt.tz_localize(None)
+    df = df.dropna(subset=['published_date'])
+    if df.empty:
+        return pd.DataFrame(), START_DATE, set()
+
+    last_date = df['published_date'].max() or START_DATE
+    existing_urls = set(df['url'].dropna().unique())
+    return df, last_date, existing_urls
 
 # ====================== SCRAPER ======================
 def scrape_guardian():
@@ -187,21 +190,12 @@ def scrape_guardian():
 
     # ====================== SAVE ======================
     if all_new:
-        new_df = pd.DataFrame(all_new)
-        combined = pd.concat([df_old, new_df], ignore_index=True) if not df_old.empty else new_df
-        combined = combined.drop_duplicates(subset=['url'])
-        combined['published_date'] = pd.to_datetime(combined['published_date'])
+        new_df = pd.DataFrame(all_new).drop_duplicates(subset=['url'])
+        inserted = db.upsert_articles(TABLE_NAME, new_df)
+        total = len(db.load_table(TABLE_NAME))
 
-        # ====================== NEW LLM-FRIENDLY SORT ======================
-        topic_order = ["Russia Ukraine war", "Iran Israel war", "Taiwan Strait conflict"]
-        combined['topic'] = pd.Categorical(combined['topic'], categories=topic_order, ordered=True)
-        combined = combined.sort_values(by=['published_date', 'topic', 'source'], ascending=[False, True, True])
-
-        combined.to_csv(CSV_FILE, index=False, encoding="utf-8-sig")
-        combined.to_pickle(PKL_FILE)
-
-        print(f"\n✅ Added {len(new_df)} relevant articles | Total: {len(combined)}")
-        print(f"   'full_text' column now contains clean text (no HTML tags)")
+        print(f"\n✅ Added {inserted} relevant articles → Total in '{TABLE_NAME}' table: {total}")
+        print(f"   'full_text' column contains clean text (no HTML tags)")
     else:
         print("\n🟡 No new relevant articles this run.")
 

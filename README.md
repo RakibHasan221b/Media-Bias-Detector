@@ -1,4 +1,4 @@
-# News Bias Detector and Temporal Media Analysis System
+# Media Bias Detector and Temporal Media Analysis System
 
 A Python-based news scraping, dataset management, and media bias analysis system for comparing how Bangladeshi and international media report major geopolitical conflicts.
 
@@ -19,7 +19,7 @@ The system is designed for academic research, thesis work, media monitoring, and
 ## Key Features
 
 - Scrapes articles from multiple news sources
-- Stores clean article datasets in CSV and PKL formats
+- Stores clean article datasets in a SQLite database (Data/articles.db)
 - Filters articles by topic, keyword, and date range
 - Compares Bangladeshi vs international media narratives
 - Detects framing, sourcing, selection, and linguistic bias
@@ -69,7 +69,7 @@ Scraper Scripts
 Clean Article Extraction
      |
      v
-CSV / PKL Dataset Storage
+SQLite Dataset Storage (articles.db)
      |
      v
 Search, Filtering, and Topic Selection
@@ -100,8 +100,8 @@ Streamlit App Interface
               v
 +---------------------------+
 |       Data Layer          |
-| CSV and PKL files stored  |
-| inside the Data folder    |
+| SQLite database           |
+| (Data/articles.db)        |
 +-------------+-------------+
               |
               v
@@ -128,16 +128,10 @@ Streamlit App Interface
 ## Project Structure
 
 ```text
-Bias-Detector/
+Media-Bias-Detector/
 |
 ├── Data/
-│   ├── bbc.csv
-│   ├── bbc.pkl
-│   ├── guardian.csv
-│   ├── guardian.pkl
-│   ├── dailystar_news.csv
-│   ├── newage_news.csv
-│   └── newage_news.pkl
+│   └── articles.db          (SQLite: bbc, guardian, dailystar, newage tables)
 |
 ├── DAILY ARTICLES/
 │   ├── BBCDAILY.py
@@ -150,6 +144,8 @@ Bias-Detector/
 │   ├── smart_system.py
 │   ├── analysis.py
 │   ├── llm.py
+│   ├── db.py
+│   ├── migrate_csv_to_sql.py
 │   ├── BBC.PY
 │   ├── GUARDIAN.PY
 │   ├── Dailystar.py
@@ -221,13 +217,25 @@ BiasEngine generates the main media bias analysis.
 
 BiasEvaluator evaluates the generated analysis against the original article texts.
 
+### SCRIPTS/db.py
+
+The SQLite storage layer. Provides `load_table()` and `upsert_articles()`, used by every
+scraper and by `smart_system.py` to read and write article data. New articles are inserted
+with a `UNIQUE(url)` constraint, so duplicates are skipped automatically.
+
+### SCRIPTS/migrate_csv_to_sql.py
+
+One-time migration script used when this project moved from CSV/pickle files to SQLite.
+Kept for reference; not part of the normal running pipeline.
+
 ### DAILY ARTICLES/
 
 Contains daily scraper scripts for updating article datasets from each source.
 
 ### Data/
 
-Contains the structured datasets used by the system.
+Contains `articles.db`, the SQLite database with one table per news source
+(`bbc`, `guardian`, `dailystar`, `newage`).
 
 ## Analysis Modes
 
@@ -379,8 +387,8 @@ The project uses:
 Clone the repository:
 
 ```bash
-git clone https://github.com/RakibHasan221b/Bias-Detector.git
-cd Bias-Detector
+git clone https://github.com/RakibHasan221b/Media-Bias-Detector.git
+cd Media-Bias-Detector
 ```
 
 Create a virtual environment:
@@ -502,7 +510,7 @@ Classify article topic
 Remove duplicates
      |
      v
-Save updated CSV and PKL files
+Save new rows to SQLite (Data/articles.db)
 ```
 
 ## Daily Update Workflow
@@ -581,8 +589,6 @@ Possible future improvements include:
 - Add topic modeling
 - Add named entity recognition
 - Add source reliability metrics
-- Add GitHub Actions automation for daily scraping
-- Add database storage
 - Add user-uploaded article comparison
 - Add multilingual support
 
@@ -603,7 +609,7 @@ GitHub: [RakibHasan221b](https://github.com/RakibHasan221b)
 
 GitHub Repository:
 
-[https://github.com/RakibHasan221b/Bias-Detector](https://github.com/RakibHasan221b/Bias-Detector)
+[https://github.com/RakibHasan221b/Media-Bias-Detector](https://github.com/RakibHasan221b/Media-Bias-Detector)
 
 ## Disclaimer
 

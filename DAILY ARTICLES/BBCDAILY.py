@@ -13,15 +13,11 @@ from dateutil import parser as date_parser
 import os
 
 # ========================= CONFIG =========================
-# YOUR EXACT PATHS
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_PATH = os.path.join(BASE_DIR, "..", "Data")
-BASE_PATH = os.path.abspath(BASE_PATH)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(SCRIPT_DIR, "..", "SCRIPTS"))
+import db
 
-os.makedirs(BASE_PATH, exist_ok=True)
-
-CSV_FILE = os.path.join(BASE_PATH, "bbc.csv")
-PKL_FILE = os.path.join(BASE_PATH, "bbc.pkl")
+TABLE_NAME = "bbc"
 
 START_DATE = datetime(2025, 6, 1)
 MAX_PAGES = 15
@@ -53,29 +49,20 @@ BBC_SELECTORS = [
 ]
 
 def load_last_state():
-    if not os.path.exists(CSV_FILE):
-        print(f"🆕 No CSV found at {CSV_FILE}. Starting fresh from {START_DATE.date()}")
+    df = db.load_table(TABLE_NAME)
+    df = df.dropna(subset=['url', 'published_date'])
+    df['published_date'] = pd.to_datetime(df['published_date'], errors='coerce')
+    df = df.dropna(subset=['published_date'])
+
+    if df.empty:
+        print(f"🆕 No existing rows in '{TABLE_NAME}' table. Starting fresh from {START_DATE.date()}")
         return pd.DataFrame(), START_DATE, set()
 
-    try:
-        df = pd.read_csv(CSV_FILE, encoding="utf-8-sig")
-        df = df.dropna(subset=['url', 'published_date'])
-        df['published_date'] = pd.to_datetime(df['published_date'], errors='coerce')
-        df = df.dropna(subset=['published_date'])
+    last_date = df['published_date'].max()
+    existing_urls = set(df['url'].dropna().tolist())
 
-        if df.empty:
-            print("⚠️ CSV empty after cleaning. Starting fresh.")
-            return pd.DataFrame(), START_DATE, set()
-
-        last_date = df['published_date'].max()
-        existing_urls = set(df['url'].dropna().tolist())
-
-        print(f"✅ Loaded CSV successfully → {len(df)} articles | Last date: {last_date.date()} | Existing URLs: {len(existing_urls)}")
-        return df, last_date, existing_urls
-
-    except Exception as e:
-        print(f"❌ Failed to load CSV: {e}. Starting fresh.")
-        return pd.DataFrame(), START_DATE, set()
+    print(f"✅ Loaded from SQL → {len(df)} articles | Last date: {last_date.date()} | Existing URLs: {len(existing_urls)}")
+    return df, last_date, existing_urls
 
 
 async def scrape_bbc(df_old, last_date, existing_urls):
@@ -189,20 +176,12 @@ def save_data(all_collected, df_old):
         return
 
     new_df = pd.DataFrame(all_collected)
-    combined = pd.concat([df_old, new_df], ignore_index=True) if not df_old.empty else new_df
-    combined = combined.drop_duplicates(subset=['url'])
-    combined['published_date'] = pd.to_datetime(combined['published_date'], errors='coerce')
-    combined = combined.dropna(subset=['published_date'])
+    new_df = new_df.drop_duplicates(subset=['url'])
 
-    topic_order = ["Russia Ukraine war", "Iran Israel war", "Taiwan Strait conflict"]
-    combined['topic'] = pd.Categorical(combined['topic'], categories=topic_order, ordered=True)
-    combined = combined.sort_values(by=['published_date', 'topic', 'source'], ascending=[False, True, True])
+    inserted = db.upsert_articles(TABLE_NAME, new_df)
+    total = len(db.load_table(TABLE_NAME))
 
-    # Save to your original location
-    combined.to_csv(CSV_FILE, index=False, encoding="utf-8-sig")
-    combined.to_pickle(PKL_FILE)
-
-    print(f"\n✅ Added {len(new_df)} new articles → Total: {len(combined)}")
+    print(f"\n✅ Added {inserted} new articles → Total in '{TABLE_NAME}' table: {total}")
 
 
 async def main():

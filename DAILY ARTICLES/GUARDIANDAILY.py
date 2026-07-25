@@ -1,3 +1,4 @@
+import sys
 import requests
 import pandas as pd
 from datetime import datetime
@@ -11,13 +12,11 @@ import re
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 # ========================= CONFIG =========================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "Data"))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(SCRIPT_DIR, "..", "SCRIPTS"))
+import db
 
-os.makedirs(BASE_PATH, exist_ok=True)
-
-CSV_FILE = os.path.join(BASE_PATH, "guardian.csv")
-PKL_FILE = os.path.join(BASE_PATH, "guardian.pkl")
+TABLE_NAME = "guardian"
 
 START_DATE = datetime(2025, 6, 1)
 API_KEY = "9942b4c5-ebe7-48d7-9b4f-b2b8c5194aaa"
@@ -61,22 +60,21 @@ def is_relevant(title, clean_text, topic):
     return False
 
 def load_last_state():
-    if os.path.exists(CSV_FILE):
-        try:
-            df = pd.read_csv(CSV_FILE)
-            if not df.empty:
-                # Take the first row because CSV is sorted newest first
-                last_date_str = df['published_date'].iloc[0]
-                last_date = datetime.strptime(last_date_str, "%Y-%m-%d")
-                existing_urls = set(df['url'].dropna().unique())
-                print(f"🔄 Last date from CSV: {last_date_str}")
-                return df, last_date, existing_urls
-        except Exception as e:
-            print(f"Warning: Could not read CSV for last date: {e}")
+    df = db.load_table(TABLE_NAME)
+    if df.empty:
+        print(f"🔄 No existing rows in '{TABLE_NAME}' table. Starting from {START_DATE.date()}")
+        return pd.DataFrame(), START_DATE, set()
 
-    # Fallback
-    print(f"🔄 No CSV found. Starting from {START_DATE.date()}")
-    return pd.DataFrame(), START_DATE, set()
+    df['published_date'] = pd.to_datetime(df['published_date'], errors='coerce')
+    df = df.dropna(subset=['published_date'])
+    if df.empty:
+        print(f"🔄 No valid dates in '{TABLE_NAME}' table. Starting from {START_DATE.date()}")
+        return pd.DataFrame(), START_DATE, set()
+
+    last_date = df['published_date'].max()
+    existing_urls = set(df['url'].dropna().unique())
+    print(f"🔄 Last date from SQL: {last_date.date()}")
+    return df, last_date, existing_urls
 
 def scrape_guardian():
     df_old, last_date, existing_urls = load_last_state()
@@ -183,19 +181,11 @@ def save_data(all_new, df_old):
         print("\n🟡 No new Guardian articles this run.")
         return
 
-    new_df = pd.DataFrame(all_new)
-    combined = pd.concat([df_old, new_df], ignore_index=True) if not df_old.empty else new_df
-    combined = combined.drop_duplicates(subset=['url'])
-    combined['published_date'] = pd.to_datetime(combined['published_date'])
+    new_df = pd.DataFrame(all_new).drop_duplicates(subset=['url'])
+    inserted = db.upsert_articles(TABLE_NAME, new_df)
+    total = len(db.load_table(TABLE_NAME))
 
-    topic_order = ["Russia Ukraine war", "Iran Israel war", "Taiwan Strait conflict"]
-    combined['topic'] = pd.Categorical(combined['topic'], categories=topic_order, ordered=True)
-    combined = combined.sort_values(by=['published_date', 'topic', 'source'], ascending=[False, True, True])
-
-    combined.to_csv(CSV_FILE, index=False, encoding="utf-8-sig")
-    combined.to_pickle(PKL_FILE)
-
-    print(f"\n✅ Guardian: Added {len(new_df)} new articles → Total now: {len(combined)}")
+    print(f"\n✅ Guardian: Added {inserted} new articles → Total in '{TABLE_NAME}' table: {total}")
 
 def main():
     print(f"🚀 Guardian Daily Scraper Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

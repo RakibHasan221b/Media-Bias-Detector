@@ -3,34 +3,23 @@ News Article Analysis Tool
 """
 
 import pandas as pd
-from pathlib import Path
 from datetime import datetime
 
-
-# ========================= CONFIGURATION =========================
-DATA_FOLDER = Path(__file__).parent.parent / "Data"
-# =================================================================
+import db
 
 
 def main():
     print("News Article Analysis Tool (Thesis Version)\n")
-    
-    if not DATA_FOLDER.exists():
-        print("❌ Data folder not found!")
-        return
-    
-    csv_files = list(DATA_FOLDER.glob("*.csv"))
-    print(f"Found {len(csv_files)} CSV files\n")
-    
+
     all_dfs = []
-    for file in csv_files:
+    for table in db.TABLES:
         try:
-            df = pd.read_csv(file)
+            df = db.load_table(table)
             all_dfs.append(df)
-            print(f"✓ Loaded {len(df):5,} articles ← {file.name}")
+            print(f"✓ Loaded {len(df):5,} articles ← '{table}' table")
         except Exception as e:
-            print(f"✗ Failed {file.name}")
-    
+            print(f"✗ Failed {table}: {e}")
+
     if not all_dfs:
         return
     

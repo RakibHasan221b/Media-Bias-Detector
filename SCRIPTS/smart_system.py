@@ -1,8 +1,7 @@
-import os
-
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+import db
 from llm import BiasEngine
 
 
@@ -36,27 +35,11 @@ def parse_news_dates(series):
 
 
 def load_data():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.dirname(script_dir)
-
-    paths = {
-        "dailystar": os.path.join(repo_root, "Data", "dailystar_news.csv"),
-        "newage": os.path.join(repo_root, "Data", "newage_news.csv"),
-        "bbc": os.path.join(repo_root, "Data", "bbc.csv"),
-        "guardian": os.path.join(repo_root, "Data", "guardian.csv"),
-    }
-
     dfs = []
 
-    for name, path in paths.items():
+    for name in db.TABLES:
         try:
-            df = pd.read_csv(path, low_memory=False)
-
-            if name == "dailystar":
-                unnamed_cols = [col for col in df.columns if col.startswith("Unnamed")]
-                df = df.drop(columns=unnamed_cols)
-                print(f"Cleaned Daily Star: dropped {len(unnamed_cols)} unnamed columns")
-
+            df = db.load_table(name)
             df["media_type"] = "BD" if name in ["dailystar", "newage"] else "International"
             print(f"Loaded {name}: {len(df)} rows")
             dfs.append(df)
@@ -66,7 +49,7 @@ def load_data():
             continue
 
     if not dfs:
-        raise FileNotFoundError("No data files were found. Check if the Data folder exists in root.")
+        raise FileNotFoundError("No data found in Data/articles.db. Check if the database exists and has rows.")
 
     df = pd.concat(dfs, ignore_index=True)
 
