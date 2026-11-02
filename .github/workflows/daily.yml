@@ -33,11 +33,14 @@ jobs:
           python "DAILY ARTICLES/BBCDAILY.py"
 
       - name: Run Guardian scraper
+        env:
+          GUARDIAN_API_KEY: ${{ secrets.GUARDIAN_API_KEY }}
         run: |
           echo "Running Guardian scraper..."
           python "DAILY ARTICLES/GUARDIANDAILY.py"
 
       - name: Run Daily Star scraper
+        if: ${{ !cancelled() }}
         run: |
           echo "Running Daily Star scraper..."
           python "DAILY ARTICLES/DAILYSTARDAILY.py"
@@ -47,9 +50,15 @@ jobs:
       # DAILY ARTICLES/NEWAGEDAILY.py is left in place if this changes later.
 
       - name: Commit updated data
+        if: ${{ !cancelled() }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
           git add Data/
           git commit -m "Daily update" || echo "No changes"
           git push
+
+      - name: Check every outlet is still collecting
+        if: ${{ !cancelled() }}
+        run: |
+          python "SCRIPTS/check_freshness.py"
