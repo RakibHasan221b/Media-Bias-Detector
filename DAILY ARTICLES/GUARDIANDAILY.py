@@ -19,7 +19,9 @@ import db
 TABLE_NAME = "guardian"
 
 START_DATE = datetime(2025, 6, 1)
-API_KEY = "9942b4c5-ebe7-48d7-9b4f-b2b8c5194aaa"
+API_KEY = os.getenv("GUARDIAN_API_KEY")
+if not API_KEY:
+    sys.exit("GUARDIAN_API_KEY is not set. Add it as a GitHub secret (or to your .env file locally).")
 
 PAGE_SIZE = 50
 MAX_PAGES_PER_TOPIC = 70
@@ -113,6 +115,10 @@ def scrape_guardian():
                     time.sleep(70)
                     continue
 
+                if r.status_code in (401, 403):
+                    # Bad or revoked API key: fail loudly so GitHub Actions shows a red X
+                    sys.exit(f"Guardian API rejected the key (HTTP {r.status_code}). Get a new key and update the GUARDIAN_API_KEY secret.")
+
                 if r.status_code == 400:
                     print("  No more new articles (API returned Bad Request)")
                     break
@@ -168,8 +174,8 @@ def scrape_guardian():
                 time.sleep(random.uniform(2.0, 4.5))
                 page += 1
 
-            except Exception as e:
-                print(f"  Error on page {page}: {e}")
+            except requests.RequestException as e:
+                print(f"  Network error on page {page}: {e}")
                 break
 
         print(f"→ {topic_name} finished → {topic_count} new articles")
